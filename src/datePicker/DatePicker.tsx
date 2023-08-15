@@ -23,6 +23,7 @@ interface IDatePicker {
   onDatePickerClose?: Function;
   disabled?: boolean;
   dataTest?: string | undefined;
+  info?: any;
 }
 
 const daysOfWeekNames = [
@@ -70,8 +71,13 @@ function DatePicker(props: IDatePicker) {
     disabled,
     minDate,
     maxDate,
-    dataTest
+    dataTest,
+    info
   } = props;
+
+  if (placeholder === undefined) {
+    placeholder = "Select";
+  }
 
   let date = new Date();
   if (selected) {
@@ -109,6 +115,7 @@ function DatePicker(props: IDatePicker) {
                 }}
                 value={selected ? formattedDate(dateFormat, date) : ""}
                 readOnly
+                info={info}
                 label={label}
                 labelInline={labelInline}
                 containerClassName={containerClassName}

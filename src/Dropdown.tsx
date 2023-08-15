@@ -74,7 +74,7 @@ function useDropdownMenuCtx(
   const [isVisible, setVisible] = useState<boolean>(false);
 
   useEffect(() => {
-    function mouseDownListener(e: MouseEvent) {
+    function mouseListener(e: MouseEvent) {
       let targetAsNode: any = e.target;
       if (ref.current && !ref.current.contains(targetAsNode)) {
         setVisible(false);
@@ -82,11 +82,13 @@ function useDropdownMenuCtx(
     }
 
     if (isVisible) {
-      document.addEventListener("mousedown", mouseDownListener);
+      document.addEventListener("mousedown", mouseListener);
+      document.addEventListener("mouseup", mouseListener);
     }
 
     return () => {
-      document.removeEventListener("mousedown", mouseDownListener);
+      document.removeEventListener("mousedown", mouseListener);
+      document.removeEventListener("mouseup", mouseListener);
     };
   }, [isVisible]);
 
@@ -134,7 +136,7 @@ function DropdownMenu(props: IDropdown) {
   return (
     <DropdownMenuCtx.Provider value={ctxValue}>
       <Manager>
-        <div className={`inline-block text-left cursor-pointer ${buttonWidth && buttonWidth}`}>
+        <div className={`inline-block text-left cursor-pointer ${buttonWidth ? buttonWidth : ""}`}>
           <Reference>
             {({ ref }) => (
               <div
@@ -158,7 +160,7 @@ function DropdownMenu(props: IDropdown) {
                   id={id}
                   style={buttonStyle && buttonStyle}
                   className={
-                    ` u-focus ${
+                    `items-center u-focus ${
                       leftRounded
                         ? "rounded-r"
                         : rightRounded

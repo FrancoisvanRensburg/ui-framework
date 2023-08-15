@@ -13,6 +13,7 @@ import { Message } from "../Message";
 import { TableActionsPanel } from "../Panels";
 import { Dropdown } from "../Dropdown";
 import { IconProp } from "@fortawesome/fontawesome-svg-core";
+import { Button } from "../Button";
 
 function CustomTable(props: {
   id: string;
@@ -43,6 +44,8 @@ function CustomTable(props: {
   loadOnPageChange?: boolean;
   rowOrderIcon?: IconProp;
   persistPage?: boolean;
+  hideRefreshButton?: boolean;
+  rowStyleFunction?: Function;
 }) {
   let {
     id,
@@ -65,7 +68,9 @@ function CustomTable(props: {
     noDataText,
     loadOnPageChange,
     rowOrderIcon,
-    persistPage
+    persistPage,
+    hideRefreshButton = false,
+    rowStyleFunction
   } = props;
   let topRef: any = useRef();
   let rowUniqueIdentifier = props.rowUniqueIdentifier ?? "id";
@@ -120,6 +125,7 @@ function CustomTable(props: {
   let [resizeColumnStartX, setResizeColumnStartX] = useState<number>(0);
   let insertRowRef = useRef(insertRow);
   let refreshRef = useRef(refresh);
+  let fetchFunctionArgumentsRef = useRef(fetchFunctionArguments);
 
   useEffect(() => {
     // rerun when props.columnOrder
@@ -170,6 +176,7 @@ function CustomTable(props: {
   }, [data, selectedRowIdentifiers]);
 
   useEffect(() => {
+    fetchFunctionArgumentsRef.current = fetchFunctionArguments;
     if (persistPage) {
       load(false, page, pageSize);
     } else {
@@ -220,8 +227,8 @@ function CustomTable(props: {
     repositionMenu();
   }, [clickPosition]);
 
-  function refresh() {
-    load(false, page, pageSize);
+  function refresh(shouldLoad?: boolean) {
+    load(false, page, pageSize, shouldLoad);
   }
 
   function insertRow(data: any[], rowOrder: any[], object: any, index: number) {
@@ -263,77 +270,75 @@ function CustomTable(props: {
   function dragColumnMouseMoveHandler(e: any) {
     let table = document.getElementById(props.id);
     let scrollableContainer = document.getElementById(props.id + "_scrollable_container");
-    // @ts-ignore
-    let tableBoundaries = table.getBoundingClientRect();
-    // @ts-ignore
-    let scrollableContainerBoundaries = scrollableContainer.getBoundingClientRect();
+    if (table && scrollableContainer && draggingElement) {
+      let tableBoundaries = table.getBoundingClientRect();
+      let scrollableContainerBoundaries = scrollableContainer.getBoundingClientRect();
 
-    if (!isDraggingStarted) {
-      isDraggingStarted = true;
-      setIsDraggingStarted(true);
+      if (!isDraggingStarted) {
+        isDraggingStarted = true;
+        setIsDraggingStarted(true);
 
-      list = customTableUtils.cloneColumnTable(props.id, list);
+        list = customTableUtils.cloneColumnTable(props.id, list);
 
-      draggingElement = [].slice.call(list.children)[draggingColumnIndex];
+        draggingElement = [].slice.call(list.children)[draggingColumnIndex];
 
-      draggingElement.classList.add("dragging");
-      draggingElement.classList.add("dragging-column");
+        draggingElement.classList.add("dragging");
+        draggingElement.classList.add("dragging-column");
 
-      placeholder = document.createElement("div");
-      placeholder.classList.add("placeholder");
-      draggingElement.parentNode.insertBefore(placeholder, draggingElement.nextSibling);
-      placeholder.style.width = `${draggingElement.offsetWidth}px`;
+        placeholder = document.createElement("div");
+        placeholder.classList.add("placeholder");
+        draggingElement.parentNode.insertBefore(placeholder, draggingElement.nextSibling);
+        placeholder.style.width = `${draggingElement.offsetWidth}px`;
+      }
+
+      draggingElement.style.position = "absolute";
+      draggingElement.style.top = `0px`;
+      let left = 0;
+
+      if (
+        scrollableContainerBoundaries.left < e.clientX &&
+        e.clientX <= scrollableContainerBoundaries.right
+      ) {
+        // in scroll range
+      } else if (scrollableContainerBoundaries.right < e.clientX) {
+        // scroll forward
+        scrollableContainer.scrollLeft += 5;
+      } else if (scrollableContainerBoundaries.left > e.clientX) {
+        // scroll back
+        scrollableContainer.scrollLeft -= 5;
+      }
+
+      let amountScrolled = scrollableContainer?.scrollLeft ?? 0;
+
+      if (tableBoundaries.left <= e.clientX && e.clientX <= tableBoundaries.right) {
+        left = e.clientX + amountScrolled - scrollableContainerBoundaries.left;
+      } else if (tableBoundaries.left > e.clientX) {
+        // max left reached
+        left = 0;
+      } else if (e.clientX > tableBoundaries.right) {
+        // max right reached
+        left = tableBoundaries.right + amountScrolled - scrollableContainerBoundaries.left;
+      }
+
+      draggingElement.style.left = `${left}px`;
+
+      let previousElement = draggingElement.previousElementSibling;
+      let nextElement = placeholder.nextElementSibling;
+
+      if (previousElement && customTableUtils.isOnLeft(draggingElement, previousElement)) {
+        customTableUtils.swap(placeholder, draggingElement);
+        customTableUtils.swap(placeholder, previousElement);
+        return;
+      }
+
+      if (nextElement && customTableUtils.isOnLeft(nextElement, draggingElement)) {
+        customTableUtils.swap(nextElement, placeholder);
+        customTableUtils.swap(nextElement, draggingElement);
+      }
+
+      setDraggingElement(draggingElement);
+      setPlaceholder(placeholder);
     }
-
-    draggingElement.style.position = "absolute";
-    draggingElement.style.top = `0px`;
-    let left = 0;
-
-    if (
-      scrollableContainerBoundaries.left < e.clientX &&
-      e.clientX <= scrollableContainerBoundaries.right
-    ) {
-      // in scroll range
-    } else if (scrollableContainerBoundaries.right < e.clientX) {
-      // scroll forward
-      // @ts-ignore
-      scrollableContainer.scrollLeft += 5;
-    } else if (scrollableContainerBoundaries.left > e.clientX) {
-      // scroll back
-      // @ts-ignore
-      scrollableContainer.scrollLeft -= 5;
-    }
-
-    let amountScrolled = scrollableContainer?.scrollLeft ?? 0;
-
-    if (tableBoundaries.left <= e.clientX && e.clientX <= tableBoundaries.right) {
-      left = e.clientX + amountScrolled - scrollableContainerBoundaries.left;
-    } else if (tableBoundaries.left > e.clientX) {
-      // max left reached
-      left = 0;
-    } else if (e.clientX > tableBoundaries.right) {
-      // max right reached
-      left = tableBoundaries.right + amountScrolled - scrollableContainerBoundaries.left;
-    }
-
-    draggingElement.style.left = `${left}px`;
-
-    let previousElement = draggingElement.previousElementSibling;
-    let nextElement = placeholder.nextElementSibling;
-
-    if (previousElement && customTableUtils.isOnLeft(draggingElement, previousElement)) {
-      customTableUtils.swap(placeholder, draggingElement);
-      customTableUtils.swap(placeholder, previousElement);
-      return;
-    }
-
-    if (nextElement && customTableUtils.isOnLeft(nextElement, draggingElement)) {
-      customTableUtils.swap(nextElement, placeholder);
-      customTableUtils.swap(nextElement, draggingElement);
-    }
-
-    setDraggingElement(draggingElement);
-    setPlaceholder(placeholder);
   }
 
   function dragColumnMouseUpHandler() {
@@ -379,59 +384,60 @@ function CustomTable(props: {
 
   function dragRowMouseMoveHandler(e: any) {
     let table = document.getElementById(props.id);
-    // @ts-ignore
-    let tableBoundaries = table.getBoundingClientRect();
+    if (table) {
+      let tableBoundaries = table.getBoundingClientRect();
 
-    if (!isDraggingStarted) {
-      isDraggingStarted = true;
+      if (!isDraggingStarted) {
+        isDraggingStarted = true;
 
-      list = customTableUtils.cloneRowTable(props.id, list);
+        list = customTableUtils.cloneRowTable(props.id, list);
 
-      draggingElement = [].slice.call(list.children)[draggingRowIndex + 1];
-      draggingElement.classList.add("dragging");
+        draggingElement = [].slice.call(list.children)[draggingRowIndex + 1];
+        draggingElement.classList.add("dragging");
 
-      placeholder = document.createElement("div");
-      placeholder.classList.add("placeholder");
-      draggingElement.parentNode.insertBefore(placeholder, draggingElement.nextSibling);
-      placeholder.style.height = `${draggingElement.offsetHeight}px`;
+        placeholder = document.createElement("div");
+        placeholder.classList.add("placeholder");
+        draggingElement.parentNode.insertBefore(placeholder, draggingElement.nextSibling);
+        placeholder.style.height = `${draggingElement.offsetHeight}px`;
+      }
+
+      draggingElement.style.position = "absolute";
+
+      draggingElement.style.left = `0px`;
+      let top = 0;
+      let tableHeaderHeight = 39;
+      let mouseY = e.clientY;
+      if (tableBoundaries.top <= mouseY && mouseY <= tableBoundaries.bottom) {
+        top = e.clientY - tableBoundaries.top;
+      } else if (tableBoundaries.top > mouseY) {
+        top = tableBoundaries.top - tableHeaderHeight;
+      } else if (mouseY > tableBoundaries.bottom) {
+        top = tableBoundaries.bottom - tableBoundaries.top - tableHeaderHeight;
+      }
+
+      draggingElement.style.top = `${top}px`;
+
+      let previousElement: any = draggingElement.previousElementSibling;
+      let nextElement: any = placeholder.nextElementSibling;
+
+      if (
+        previousElement &&
+        previousElement.previousElementSibling &&
+        customTableUtils.isAbove(draggingElement, previousElement)
+      ) {
+        customTableUtils.swap(placeholder, draggingElement);
+        customTableUtils.swap(placeholder, previousElement);
+        return;
+      }
+
+      if (nextElement && customTableUtils.isAbove(nextElement, draggingElement)) {
+        customTableUtils.swap(nextElement, placeholder);
+        customTableUtils.swap(nextElement, draggingElement);
+      }
+
+      setDraggingElement(draggingElement);
+      setPlaceholder(placeholder);
     }
-
-    draggingElement.style.position = "absolute";
-
-    draggingElement.style.left = `0px`;
-    let top = 0;
-    let tableHeaderHeight = 39;
-    let mouseY = e.clientY;
-    if (tableBoundaries.top <= mouseY && mouseY <= tableBoundaries.bottom) {
-      top = e.clientY - tableBoundaries.top;
-    } else if (tableBoundaries.top > mouseY) {
-      top = tableBoundaries.top - tableHeaderHeight;
-    } else if (mouseY > tableBoundaries.bottom) {
-      top = tableBoundaries.bottom - tableBoundaries.top - tableHeaderHeight;
-    }
-
-    draggingElement.style.top = `${top}px`;
-
-    let previousElement: any = draggingElement.previousElementSibling;
-    let nextElement: any = placeholder.nextElementSibling;
-
-    if (
-      previousElement &&
-      previousElement.previousElementSibling &&
-      customTableUtils.isAbove(draggingElement, previousElement)
-    ) {
-      customTableUtils.swap(placeholder, draggingElement);
-      customTableUtils.swap(placeholder, previousElement);
-      return;
-    }
-
-    if (nextElement && customTableUtils.isAbove(nextElement, draggingElement)) {
-      customTableUtils.swap(nextElement, placeholder);
-      customTableUtils.swap(nextElement, draggingElement);
-    }
-
-    setDraggingElement(draggingElement);
-    setPlaceholder(placeholder);
   }
 
   function dragRowMouseUpHandler() {
@@ -595,7 +601,6 @@ function CustomTable(props: {
               } else {
                 let _selected: any = [];
                 for (let i = 0; i < data.length; i++) {
-                  // @ts-ignore
                   _selected.push(data[i][rowUniqueIdentifier].toString());
                 }
 
@@ -614,7 +619,6 @@ function CustomTable(props: {
               )}
               onClick={() => {
                 let selectedIndex = selectedRowIdentifiers.indexOf(
-                  // @ts-ignore
                   row.original[rowUniqueIdentifier].toString()
                 );
                 if (selectedIndex > -1) {
@@ -622,7 +626,6 @@ function CustomTable(props: {
                   selectedRowIdentifiers.splice(selectedIndex, 1);
                   changeSelection(selectedRowIdentifiers);
                 } else {
-                  // @ts-ignore
                   selectedRowIdentifiers.push(row.original[rowUniqueIdentifier].toString());
                   if (selectedRowIdentifiers.length === pageSize) {
                     setAllRowsSelected(true);
@@ -701,7 +704,7 @@ function CustomTable(props: {
 
       let offset = pageSize * (_page - 1);
       let pages = 0;
-      let args = fetchFunctionArguments ?? {};
+      let args = fetchFunctionArgumentsRef.current ?? {};
       if (!noPagination) {
         args.offset = offset;
         args.limit = pageSize;
@@ -712,6 +715,10 @@ function CustomTable(props: {
       }
 
       let { data, count, error } = await fetchFunction(args);
+
+      if (!data) {
+        data = [];
+      }
 
       if (!noPagination) {
         pages = Math.ceil(count / pageSize);
@@ -871,6 +878,7 @@ function CustomTable(props: {
                   let rowData = customTableUtils.getDataByRowId(data, rowUniqueIdentifier, rowId);
                   return (
                     <CustomTableRow
+                      rowStyleFunction={rowStyleFunction}
                       isLoading={isLoading}
                       key={rowId}
                       onShowMenu={(show: boolean) => {
@@ -947,6 +955,16 @@ function CustomTable(props: {
         props.renderTableActionsHeader && (
           <TableActionsPanel title={title}>
             {props.renderTableActionsChildren && props.renderTableActionsChildren(data, isLoading)}
+            {!hideRefreshButton && (
+              <Button.Link
+                color="black"
+                title="Refresh"
+                onClick={() => {
+                  refreshRef.current(true);
+                }}
+                icon="redo-alt"
+              />
+            )}
           </TableActionsPanel>
         )
       );
